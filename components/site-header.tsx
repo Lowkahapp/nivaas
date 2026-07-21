@@ -14,7 +14,7 @@ export function SiteHeader() {
             <span className="font-heading text-xl font-extrabold tracking-tight text-foreground">
               Nivaas
             </span>
-            <span className="text-[11px] font-medium text-muted-foreground">Hinjewadi Phase 3</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Find your home</span>
           </span>
         </Link>
 
@@ -56,7 +56,7 @@ export function SiteHeader() {
             className="hidden sm:inline-flex"
             render={<Link href="/list-property" />}
           >
-            List your flat
+            List property
           </Button>
           <Button variant="outline" size="icon-sm" className="md:hidden" aria-label="Open menu">
             <Menu className="size-4" />
