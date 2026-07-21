@@ -11,10 +11,10 @@ const jakarta = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Nestly — Find Your Next Apartment',
+  title: 'Nivaas — Verified Rentals, Zero Brokerage',
   description:
-    'Search thousands of apartments for rent. Filter by price, beds, and amenities to find the perfect place to call home.',
-  generator: 'v0.app',
+    'Find 100% field-verified apartments for rent across India. No fake listings, no broker fees. Schedule visits and move in stress-free with Nivaas.',
+  generator: 'nivaas.in',
   icons: {
     icon: [
       {
