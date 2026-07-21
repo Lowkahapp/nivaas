@@ -4,15 +4,30 @@ import { Building2 } from "lucide-react"
 const columns = [
   {
     title: "Tenants",
-    links: ["Search 2 BHK flats", "Fully furnished homes", "How verification works", "Schedule a visit"],
+    links: [
+      { label: "Search 2 BHK flats", href: "/search?bhk=2" },
+      { label: "Fully furnished homes", href: "/search?furnishing=Fully+Furnished" },
+      { label: "How verification works", href: "/how-it-works" },
+      { label: "Schedule a visit", href: "/search" },
+    ],
   },
   {
     title: "Landlords",
-    links: ["List your flat", "Concierge management", "Tenant screening", "RERA guidance"],
+    links: [
+      { label: "List your flat", href: "/list-property" },
+      { label: "Concierge management", href: "/landlords/concierge" },
+      { label: "Tenant screening", href: "/landlords/tenant-screening" },
+      { label: "RERA guidance", href: "/landlords/rera-guidance" },
+    ],
   },
   {
     title: "Company",
-    links: ["About Nivaas", "Careers", "Contact us", "Blog"],
+    links: [
+      { label: "About Nivaas", href: "/about" },
+      { label: "Careers", href: "/careers" },
+      { label: "Contact us", href: "/contact" },
+      { label: "Blog", href: "/blog" },
+    ],
   },
 ]
 
@@ -41,12 +56,12 @@ export function SiteFooter() {
               <h3 className="font-heading text-sm font-bold text-foreground">{col.title}</h3>
               <ul className="mt-4 space-y-3">
                 {col.links.map((link) => (
-                  <li key={link}>
+                  <li key={link.label}>
                     <Link
-                      href="/search"
+                      href={link.href}
                       className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      {link}
+                      {link.label}
                     </Link>
                   </li>
                 ))}
