@@ -5,21 +5,21 @@ import { SiteFooter } from "@/components/site-footer"
 import { ListPropertyForm } from "@/components/list-property-form"
 
 export const metadata: Metadata = {
-  title: "List your flat — Nivaas",
+  title: "List your property — Nivaas",
   description:
-    "List your Hinjewadi Phase 3 flat with Nivaas. We verify, market, and manage it end to end to find screened tenants fast.",
+    "List your apartment with Nivaas. We verify, market, and manage it end to end to find screened tenants fast.",
 }
 
 const benefits = [
   {
     icon: BadgeCheck,
     title: "Free verification",
-    body: "Our team inspects and photographs your flat at no cost.",
+    body: "Our team inspects and photographs your property at no cost.",
   },
   {
     icon: Users,
     title: "Screened tenants",
-    body: "We match you with verified IT professionals looking to move in.",
+    body: "We match you with verified, qualified professionals looking to move in.",
   },
   {
     icon: Headset,
@@ -36,7 +36,7 @@ export default function ListPropertyPage() {
         <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h1 className="font-heading text-3xl font-extrabold tracking-tight text-foreground text-balance sm:text-4xl">
-              List your flat in Hinjewadi Phase 3
+              List your property with us
             </h1>
             <p className="mt-3 leading-relaxed text-muted-foreground text-pretty">
               Tell us about your property and our team will verify and market it to screened tenants.
