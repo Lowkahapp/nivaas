@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Building2, Heart, Menu } from "lucide-react"
+import { Building2, Heart, Menu, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export function SiteHeader() {
@@ -36,6 +36,13 @@ export function SiteHeader() {
             className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             All rentals
+          </Link>
+          <Link
+            href="/rental-trends"
+            className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <TrendingUp className="size-3.5" />
+            Trends
           </Link>
         </nav>
 

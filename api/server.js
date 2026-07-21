@@ -395,6 +395,85 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
   }
 });
 
+// ============ RENTAL TRENDS ENDPOINT ============
+
+app.get('/api/trends', async (req, res) => {
+  try {
+    // 1. Average rent + count by BHK
+    const byBhk = await getAll(
+      `SELECT bhk,
+              ROUND(AVG(rent)) AS avg_rent,
+              ROUND(MIN(rent))  AS min_rent,
+              ROUND(MAX(rent))  AS max_rent,
+              COUNT(*)          AS listing_count
+       FROM properties
+       WHERE status = 'live'
+       GROUP BY bhk
+       ORDER BY bhk`,
+      []
+    );
+
+    // 2. Top localities by listing count + avg rent
+    const byLocality = await getAll(
+      `SELECT locality,
+              ROUND(AVG(rent))  AS avg_rent,
+              COUNT(*)          AS listing_count
+       FROM properties
+       WHERE status = 'live' AND locality != ''
+       GROUP BY locality
+       ORDER BY listing_count DESC
+       LIMIT 10`,
+      []
+    );
+
+    // 3. Demand vs supply — enquiries per listing by locality
+    const demandSupply = await getAll(
+      `SELECT p.locality,
+              COUNT(DISTINCT p.id)   AS live_listings,
+              COUNT(vr.id)           AS total_enquiries,
+              ROUND(COUNT(vr.id)::numeric / NULLIF(COUNT(DISTINCT p.id), 0), 1) AS enquiries_per_listing
+       FROM properties p
+       LEFT JOIN visit_requests vr ON vr.property_id = p.id
+       WHERE p.status = 'live' AND p.locality != ''
+       GROUP BY p.locality
+       ORDER BY enquiries_per_listing DESC
+       LIMIT 10`,
+      []
+    );
+
+    // 4. Summary stats
+    const summary = await getOne(
+      `SELECT ROUND(AVG(rent)) AS overall_avg_rent,
+              COUNT(*)          AS total_live_listings
+       FROM properties
+       WHERE status = 'live'`,
+      []
+    );
+
+    const newThisMonth = await getOne(
+      `SELECT COUNT(*) AS count
+       FROM visit_requests
+       WHERE created_at >= date_trunc('month', NOW())`,
+      []
+    );
+
+    res.json({
+      generated_at: new Date().toISOString(),
+      summary: {
+        overall_avg_rent: parseInt(summary?.overall_avg_rent || 0),
+        total_live_listings: parseInt(summary?.total_live_listings || 0),
+        enquiries_this_month: parseInt(newThisMonth?.count || 0),
+      },
+      by_bhk: byBhk,
+      by_locality: byLocality,
+      demand_supply: demandSupply,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });

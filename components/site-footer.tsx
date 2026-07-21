@@ -27,6 +27,7 @@ const columns = [
       { label: "Careers", href: "/careers" },
       { label: "Contact us", href: "/contact" },
       { label: "Blog", href: "/blog" },
+      { label: "Rental Trends", href: "/rental-trends" },
     ],
   },
 ]
