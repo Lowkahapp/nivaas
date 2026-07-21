@@ -11,20 +11,38 @@ export function ListPropertyForm() {
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [uploadProgress, setUploadProgress] = useState("")
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
     setError("")
+    setUploadProgress("")
 
     try {
-      const data = Object.fromEntries(new FormData(e.currentTarget))
+      const form = e.currentTarget
+      const data = Object.fromEntries(new FormData(form)) as Record<string, string>
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+
+      // Upload media files first if any were selected
+      const fileInput = form.querySelector<HTMLInputElement>('input[name="media"]')
+      let imageUrls: string[] = []
+      if (fileInput?.files && fileInput.files.length > 0) {
+        setUploadProgress("Uploading photos…")
+        const fd = new FormData()
+        Array.from(fileInput.files).forEach((f) => fd.append("files", f))
+        const uploadRes = await fetch(`${apiUrl}/api/upload`, { method: "POST", body: fd })
+        if (uploadRes.ok) {
+          const uploaded = await uploadRes.json()
+          imageUrls = uploaded.urls
+        }
+        setUploadProgress("")
+      }
 
       const response = await fetch(`${apiUrl}/api/properties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, images: JSON.stringify(imageUrls) }),
       })
 
       if (!response.ok) {
@@ -83,8 +101,14 @@ export function ListPropertyForm() {
       <Field
         label="Society / building name"
         name="society"
-        placeholder="e.g. Megapolis Sangria Towers, Hinjewadi Phase 3"
+        placeholder="e.g. Megapolis Sangria Towers"
       />
+
+      <div className="grid gap-5 sm:grid-cols-3">
+        <Field label="Locality" name="locality" placeholder="e.g. Hinjewadi Phase 3" />
+        <Field label="City" name="city" placeholder="e.g. Pune" />
+        <Field label="Pincode" name="pincode" placeholder="e.g. 411057" />
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-3">
         <SelectField label="Configuration" name="bhk" options={BHK} />
@@ -111,7 +135,7 @@ export function ListPropertyForm() {
       </div>
 
       <Button type="submit" size="lg" className="w-full" disabled={loading}>
-        {loading ? "Submitting..." : "Submit for verification"}
+        {uploadProgress || (loading ? "Submitting..." : "Submit for verification")}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         Free to list. We only earn when your flat is successfully rented.

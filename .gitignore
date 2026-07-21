@@ -13,3 +13,7 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+
+# Uploaded media files (keep folder, ignore contents)
+api/uploads/*
+!api/uploads/.gitkeep

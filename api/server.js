@@ -1,12 +1,89 @@
 import express from 'express';
 import cors from 'cors';
+import nodemailer from 'nodemailer';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { getOne, getAll, query } from './db.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
+
+// File upload — store in /uploads, accessible at /uploads/<filename>
+const uploadDir = path.join(__dirname, 'uploads');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max per file
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(jpe?g|png|webp|gif|mp4|mov)$/i;
+    cb(null, allowed.test(file.originalname));
+  },
+});
+app.use('/uploads', express.static(uploadDir));
+
+// POST /api/upload — accepts up to 10 files, returns array of URLs
+app.post('/api/upload', upload.array('files', 10), (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'No files uploaded' });
+  }
+  const baseUrl = process.env.API_BASE_URL || `http://localhost:${PORT}`;
+  const urls = req.files.map((f) => `${baseUrl}/uploads/${f.filename}`);
+  res.json({ urls });
+});
+
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'change-me-in-production';
+
+// Email transporter — only active if SMTP_HOST is set
+const mailer = process.env.SMTP_HOST
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    })
+  : null;
+
+async function sendVisitConfirmation({ tenantName, tenantEmail, societyName, preferredDate }) {
+  if (!mailer || !tenantEmail) return;
+  try {
+    await mailer.sendMail({
+      from: process.env.SMTP_FROM || '"Nivaas" <noreply@nivaas.in>',
+      to: tenantEmail,
+      subject: `Visit request confirmed – ${societyName}`,
+      text: `Hi ${tenantName},\n\nWe've received your visit request for ${societyName}${preferredDate ? ` on ${preferredDate}` : ''}.\n\nYour relationship manager will call you within 2 hours to confirm the slot.\n\nTeam Nivaas`,
+      html: `<p>Hi <strong>${tenantName}</strong>,</p>
+<p>We've received your visit request for <strong>${societyName}</strong>${preferredDate ? ` on <strong>${preferredDate}</strong>` : ''}.</p>
+<p>Your relationship manager will call you within 2 hours to confirm the slot.</p>
+<p>Team Nivaas</p>`,
+    });
+  } catch (err) {
+    console.error('Email send failed:', err.message);
+  }
+}
+
+// Middleware: require X-Admin-Key header for protected routes
+function requireAdmin(req, res, next) {
+  const key = req.headers['x-admin-key'];
+  if (!key || key !== ADMIN_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized: invalid or missing admin key' });
+  }
+  next();
+}
 
 // ============ PROPERTY ENDPOINTS ============
 
@@ -17,6 +94,9 @@ app.post('/api/properties', async (req, res) => {
       ownerName,
       phone,
       society,
+      locality,
+      city,
+      pincode,
       bhk,
       furnishing,
       area,
@@ -62,9 +142,9 @@ app.post('/api/properties', async (req, res) => {
         parseInt(deposit),
         parseInt(maintenance),
         society, // address
-        'Hinjewadi Phase 3', // locality
-        'Pune',
-        '411057',
+        locality || '',
+        city || '',
+        pincode || '',
         'pending',
       ]
     );
@@ -80,10 +160,14 @@ app.post('/api/properties', async (req, res) => {
   }
 });
 
-// Get all properties (with filters)
+// Get all properties (with filters + pagination)
 app.get('/api/properties', async (req, res) => {
   try {
-    const { status, bhk, furnishing, minRent, maxRent } = req.query;
+    const { status, bhk, furnishing, minRent, maxRent, page, limit } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(limit) || 20));
+    const offset = (pageNum - 1) * pageSize;
+
     let sql = 'SELECT * FROM properties WHERE status = $1';
     const params = [status || 'live'];
 
@@ -104,9 +188,24 @@ app.get('/api/properties', async (req, res) => {
       params.push(parseInt(maxRent));
     }
 
-    sql += ' ORDER BY created_at DESC';
+    // Count total for pagination metadata
+    const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as total');
+    const countResult = await getOne(countSql, params);
+    const total = parseInt(countResult?.total || 0);
+
+    sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(pageSize, offset);
+
     const properties = await getAll(sql, params);
-    res.json(properties);
+    res.json({
+      data: properties,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -128,7 +227,7 @@ app.get('/api/properties/:id', async (req, res) => {
 });
 
 // Update property status (admin)
-app.patch('/api/properties/:id', async (req, res) => {
+app.patch('/api/properties/:id', requireAdmin, async (req, res) => {
   try {
     const { status, rera_verified, field_verified, verified_by } = req.body;
     const updates = [];
@@ -166,7 +265,7 @@ app.patch('/api/properties/:id', async (req, res) => {
 });
 
 // Delete property (admin)
-app.delete('/api/properties/:id', async (req, res) => {
+app.delete('/api/properties/:id', requireAdmin, async (req, res) => {
   try {
     await query('DELETE FROM properties WHERE id = $1', [req.params.id]);
     res.json({ message: 'Property deleted' });
@@ -194,6 +293,15 @@ app.post('/api/visit-requests', async (req, res) => {
       [property_id, tenant_name, tenant_phone, tenant_email, preferred_date, 'new']
     );
 
+    // Send confirmation email (non-blocking)
+    const property = await getOne('SELECT society_name FROM properties WHERE id = $1', [property_id]);
+    sendVisitConfirmation({
+      tenantName: tenant_name,
+      tenantEmail: tenant_email,
+      societyName: property?.society_name || 'the property',
+      preferredDate: preferred_date,
+    });
+
     res.json({
       id: result.rows[0].id,
       status: result.rows[0].status,
@@ -206,7 +314,7 @@ app.post('/api/visit-requests', async (req, res) => {
 });
 
 // Get visit requests (admin/staff)
-app.get('/api/visit-requests', async (req, res) => {
+app.get('/api/visit-requests', requireAdmin, async (req, res) => {
   try {
     const { status, property_id, assigned_to } = req.query;
     let sql = 'SELECT vr.*, p.society_name FROM visit_requests vr JOIN properties p ON vr.property_id = p.id WHERE 1=1';
@@ -234,7 +342,7 @@ app.get('/api/visit-requests', async (req, res) => {
 });
 
 // Update visit request status (admin/staff)
-app.patch('/api/visit-requests/:id', async (req, res) => {
+app.patch('/api/visit-requests/:id', requireAdmin, async (req, res) => {
   try {
     const { status, assigned_to, notes } = req.body;
     const updates = [];
@@ -269,7 +377,7 @@ app.patch('/api/visit-requests/:id', async (req, res) => {
 // ============ ADMIN STATS ENDPOINTS ============
 
 // Get dashboard stats
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', requireAdmin, async (req, res) => {
   try {
     const pendingProps = await getOne('SELECT COUNT(*) as count FROM properties WHERE status = $1', ['pending']);
     const liveProps = await getOne('SELECT COUNT(*) as count FROM properties WHERE status = $1', ['live']);

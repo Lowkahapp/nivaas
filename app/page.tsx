@@ -78,6 +78,23 @@ export default function HomePage() {
                   </Link>
                 ))}
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-background/90">
+                <span>By budget:</span>
+                {[
+                  { label: "Under ₹15k", url: "/search?maxRent=15000" },
+                  { label: "₹15k–25k", url: "/search?minRent=15000&maxRent=25000" },
+                  { label: "₹25k–40k", url: "/search?minRent=25000&maxRent=40000" },
+                  { label: "Above ₹40k", url: "/search?minRent=40000" },
+                ].map((c) => (
+                  <Link
+                    key={c.label}
+                    href={c.url}
+                    className="underline-offset-4 hover:underline"
+                  >
+                    {c.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -87,7 +104,7 @@ export default function HomePage() {
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-4 lg:px-8">
             <Stat value={`${verifiedCount}+`} label="Verified listings" />
             <Stat value="100%" label="Physically inspected" />
-            <Stat value="0 %Brokerage" label="Tenant charges" />
+            <Stat value="Zero Brokerage" label="Tenant charges" />
             <Stat value="24/7" label="Customer support" />
           </div>
         </section>

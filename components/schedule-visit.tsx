@@ -11,6 +11,7 @@ export function ScheduleVisit({ listing }: { listing: Listing }) {
   const [error, setError] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
+  const [email, setEmail] = useState("")
   const [date, setDate] = useState("")
 
   async function handleSubmit(e: React.FormEvent) {
@@ -27,6 +28,7 @@ export function ScheduleVisit({ listing }: { listing: Listing }) {
           property_id: parseInt(listing.id.split("-").pop() || "1"),
           tenant_name: name,
           tenant_phone: phone,
+          tenant_email: email,
           preferred_date: date,
         }),
       })
@@ -68,10 +70,20 @@ export function ScheduleVisit({ listing }: { listing: Listing }) {
       {submitted ? (
         <div className="mt-5 flex flex-col items-center rounded-xl border border-primary/30 bg-primary/5 px-4 py-6 text-center">
           <CheckCircle2 className="size-8 text-primary" />
-          <p className="mt-2 font-heading text-base font-bold text-foreground">Visit requested</p>
+          <p className="mt-2 font-heading text-base font-bold text-foreground">Visit requested!</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your Nivaas relationship manager will call {phone || "you"} shortly to confirm your slot.
+            Your Nivaas relationship manager will call <span className="font-medium text-foreground">{phone}</span> within 2 hours to confirm your visit slot.
           </p>
+          {email && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              A confirmation will also be sent to <span className="font-medium">{email}</span>.
+            </p>
+          )}
+          {date && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Preferred date: <span className="font-medium text-foreground">{new Date(date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
+            </p>
+          )}
         </div>
       ) : error ? (
         <div className="mt-5 flex flex-col items-center rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center">
@@ -100,6 +112,14 @@ export function ScheduleVisit({ listing }: { listing: Listing }) {
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Mobile number"
             aria-label="Mobile number"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+          />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email (for confirmation)"
+            aria-label="Email address"
             className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
           />
           <input

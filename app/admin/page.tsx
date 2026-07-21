@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { BarChart3, Home, Users, AlertCircle, CheckCircle2, Clock, Eye } from "lucide-react"
+import { BarChart3, Home, Users, AlertCircle, CheckCircle2, Clock, Eye, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface DashboardStats {
@@ -37,14 +37,62 @@ export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [requests, setRequests] = useState<VisitRequest[]>([])
   const [activeTab, setActiveTab] = useState<"overview" | "properties" | "requests">("overview")
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [adminKey, setAdminKey] = useState("")
+  const [keyInput, setKeyInput] = useState("")
+  const [loginError, setLoginError] = useState("")
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
+  const authHeaders = {
+    "Content-Type": "application/json",
+    "x-admin-key": adminKey,
+  }
+
   useEffect(() => {
-    loadData()
-  }, [])
+    if (adminKey) loadData()
+  }, [adminKey])
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoginError("")
+    // Quick pre-check: attempt to hit a protected endpoint
+    const res = await fetch(`${apiUrl}/api/stats`, {
+      headers: { "x-admin-key": keyInput },
+    })
+    if (res.ok) {
+      setAdminKey(keyInput)
+    } else {
+      setLoginError("Invalid admin key. Please try again.")
+    }
+  }
+
+  if (!adminKey) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary mx-auto">
+            <Lock className="size-6" />
+          </div>
+          <h1 className="mt-4 text-center font-heading text-xl font-bold text-foreground">Admin Login</h1>
+          <p className="mt-1 text-center text-sm text-muted-foreground">Enter your admin key to continue</p>
+          <form onSubmit={handleLogin} className="mt-6 space-y-4">
+            <input
+              type="password"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              placeholder="Admin key"
+              required
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            {loginError && <p className="text-xs text-red-600">{loginError}</p>}
+            <Button type="submit" className="w-full">Sign in</Button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   async function loadData() {
     try {
@@ -52,9 +100,9 @@ export default function AdminPage() {
       setError("")
 
       const [statsRes, propsRes, reqsRes] = await Promise.all([
-        fetch(`${apiUrl}/api/stats`),
-        fetch(`${apiUrl}/api/properties?status=pending`),
-        fetch(`${apiUrl}/api/visit-requests?status=new`),
+        fetch(`${apiUrl}/api/stats`, { headers: authHeaders }),
+        fetch(`${apiUrl}/api/properties?status=pending`, { headers: authHeaders }),
+        fetch(`${apiUrl}/api/visit-requests?status=new`, { headers: authHeaders }),
       ])
 
       if (!statsRes.ok || !propsRes.ok || !reqsRes.ok) throw new Error("Failed to load data")
@@ -64,7 +112,7 @@ export default function AdminPage() {
       const reqsData = await reqsRes.json()
 
       setStats(statsData)
-      setProperties(propsData)
+      setProperties(propsData.data ?? propsData)
       setRequests(reqsData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard")
@@ -77,7 +125,7 @@ export default function AdminPage() {
     try {
       const response = await fetch(`${apiUrl}/api/properties/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ status: "live", field_verified: true }),
       })
       if (!response.ok) throw new Error("Failed to approve")
@@ -91,7 +139,7 @@ export default function AdminPage() {
     try {
       const response = await fetch(`${apiUrl}/api/properties/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ status: "rejected" }),
       })
       if (!response.ok) throw new Error("Failed to reject")
@@ -105,7 +153,7 @@ export default function AdminPage() {
     try {
       const response = await fetch(`${apiUrl}/api/visit-requests/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ status }),
       })
       if (!response.ok) throw new Error("Failed to update")

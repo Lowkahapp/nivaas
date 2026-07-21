@@ -35,16 +35,21 @@ export function SearchResults({
   initialQuery = "",
   initialBhk = -1,
   initialFurnishing = "Any",
+  initialMaxRent = 1000000,
+  initialMinRent = 0,
 }: {
   listings: Listing[]
   initialQuery?: string
   initialBhk?: number
   initialFurnishing?: string
+  initialMaxRent?: number
+  initialMinRent?: number
 }) {
   const [query, setQuery] = useState(initialQuery)
   const [bhk, setBhk] = useState(initialBhk)
   const [furnishing, setFurnishing] = useState(initialFurnishing)
-  const [maxRent, setMaxRent] = useState(1000000)
+  const [maxRent, setMaxRent] = useState(initialMaxRent)
+  const [minRent, setMinRent] = useState(initialMinRent)
   const [reraOnly, setReraOnly] = useState(false)
   const [parkingOnly, setParkingOnly] = useState(false)
   const [sort, setSort] = useState("recommended")
@@ -60,6 +65,7 @@ export function SearchResults({
       if (bhk >= 0 && l.bhk !== bhk) return false
       if (furnishing !== "Any" && l.furnishing !== furnishing) return false
       if (l.rent > maxRent) return false
+      if (minRent > 0 && l.rent < minRent) return false
       if (reraOnly && !l.reraVerified) return false
       if (parkingOnly && !l.parking) return false
       return true
@@ -71,15 +77,16 @@ export function SearchResults({
     else if (sort === "rating") sorted.sort((a, b) => b.rating - a.rating)
     else sorted.sort((a, b) => b.rating - a.rating)
     return sorted
-  }, [listings, query, bhk, furnishing, maxRent, reraOnly, parkingOnly, sort])
+  }, [listings, query, bhk, furnishing, maxRent, minRent, reraOnly, parkingOnly, sort])
 
   const hasFilters =
-    bhk !== -1 || furnishing !== "Any" || maxRent !== 1000000 || reraOnly || parkingOnly
+    bhk !== -1 || furnishing !== "Any" || maxRent !== 1000000 || minRent > 0 || reraOnly || parkingOnly
 
   function reset() {
     setBhk(-1)
     setFurnishing("Any")
     setMaxRent(1000000)
+    setMinRent(0)
     setReraOnly(false)
     setParkingOnly(false)
   }
