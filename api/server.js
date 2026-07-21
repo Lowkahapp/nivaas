@@ -1,0 +1,297 @@
+import express from 'express';
+import cors from 'cors';
+import { getOne, getAll, query } from './db.js';
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3001;
+
+// ============ PROPERTY ENDPOINTS ============
+
+// Submit a new property (landlord form)
+app.post('/api/properties', async (req, res) => {
+  try {
+    const {
+      ownerName,
+      phone,
+      society,
+      bhk,
+      furnishing,
+      area,
+      rent,
+      deposit,
+      maintenance = 0,
+      media,
+    } = req.body;
+
+    if (!ownerName || !phone || !society || !bhk || !furnishing || !rent || !deposit) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Create landlord user if doesn't exist
+    const existingUser = await getOne(
+      'SELECT id FROM users WHERE phone = $1',
+      [phone]
+    );
+    let userId = existingUser?.id;
+
+    if (!userId) {
+      const result = await query(
+        'INSERT INTO users (phone, name, role) VALUES ($1, $2, $3) RETURNING id',
+        [phone, ownerName, 'landlord']
+      );
+      userId = result.rows[0].id;
+    }
+
+    // Create property
+    const result = await query(
+      `INSERT INTO properties (
+        landlord_id, society_name, bhk, furnishing, area_sqft, rent, 
+        deposit, maintenance, address, locality, city, pincode, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, status, created_at`,
+      [
+        userId,
+        society,
+        parseInt(bhk),
+        furnishing,
+        parseInt(area),
+        parseInt(rent),
+        parseInt(deposit),
+        parseInt(maintenance),
+        society, // address
+        'Hinjewadi Phase 3', // locality
+        'Pune',
+        '411057',
+        'pending',
+      ]
+    );
+
+    res.json({
+      id: result.rows[0].id,
+      status: result.rows[0].status,
+      message: 'Property submitted for verification',
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all properties (with filters)
+app.get('/api/properties', async (req, res) => {
+  try {
+    const { status, bhk, furnishing, minRent, maxRent } = req.query;
+    let sql = 'SELECT * FROM properties WHERE status = $1';
+    const params = [status || 'live'];
+
+    if (bhk) {
+      sql += ` AND bhk = $${params.length + 1}`;
+      params.push(parseInt(bhk));
+    }
+    if (furnishing) {
+      sql += ` AND furnishing = $${params.length + 1}`;
+      params.push(furnishing);
+    }
+    if (minRent) {
+      sql += ` AND rent >= $${params.length + 1}`;
+      params.push(parseInt(minRent));
+    }
+    if (maxRent) {
+      sql += ` AND rent <= $${params.length + 1}`;
+      params.push(parseInt(maxRent));
+    }
+
+    sql += ' ORDER BY created_at DESC';
+    const properties = await getAll(sql, params);
+    res.json(properties);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single property
+app.get('/api/properties/:id', async (req, res) => {
+  try {
+    const property = await getOne(
+      'SELECT * FROM properties WHERE id = $1',
+      [req.params.id]
+    );
+    if (!property) return res.status(404).json({ error: 'Property not found' });
+    res.json(property);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update property status (admin)
+app.patch('/api/properties/:id', async (req, res) => {
+  try {
+    const { status, rera_verified, field_verified, verified_by } = req.body;
+    const updates = [];
+    const params = [];
+    let paramCount = 1;
+
+    if (status) {
+      updates.push(`status = $${paramCount++}`);
+      params.push(status);
+    }
+    if (rera_verified !== undefined) {
+      updates.push(`rera_verified = $${paramCount++}`);
+      params.push(rera_verified);
+    }
+    if (field_verified !== undefined) {
+      updates.push(`field_verified = $${paramCount++}`);
+      params.push(field_verified);
+    }
+    if (verified_by) {
+      updates.push(`verified_by = $${paramCount++}`);
+      params.push(verified_by);
+      updates.push(`verified_at = NOW()`);
+    }
+    updates.push(`updated_at = NOW()`);
+
+    params.push(req.params.id);
+    const sql = `UPDATE properties SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+
+    const result = await query(sql, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Property not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete property (admin)
+app.delete('/api/properties/:id', async (req, res) => {
+  try {
+    await query('DELETE FROM properties WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Property deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ VISIT REQUEST ENDPOINTS ============
+
+// Submit a visit request (tenant form)
+app.post('/api/visit-requests', async (req, res) => {
+  try {
+    const { property_id, tenant_name, tenant_phone, tenant_email, preferred_date } = req.body;
+
+    if (!property_id || !tenant_name || !tenant_phone) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const result = await query(
+      `INSERT INTO visit_requests (
+        property_id, tenant_name, tenant_phone, tenant_email, preferred_date, status
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, status, created_at`,
+      [property_id, tenant_name, tenant_phone, tenant_email, preferred_date, 'new']
+    );
+
+    res.json({
+      id: result.rows[0].id,
+      status: result.rows[0].status,
+      message: 'Visit request submitted',
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get visit requests (admin/staff)
+app.get('/api/visit-requests', async (req, res) => {
+  try {
+    const { status, property_id, assigned_to } = req.query;
+    let sql = 'SELECT vr.*, p.society_name FROM visit_requests vr JOIN properties p ON vr.property_id = p.id WHERE 1=1';
+    const params = [];
+
+    if (status) {
+      sql += ` AND vr.status = $${params.length + 1}`;
+      params.push(status);
+    }
+    if (property_id) {
+      sql += ` AND vr.property_id = $${params.length + 1}`;
+      params.push(property_id);
+    }
+    if (assigned_to) {
+      sql += ` AND vr.assigned_to = $${params.length + 1}`;
+      params.push(assigned_to);
+    }
+
+    sql += ' ORDER BY vr.created_at DESC';
+    const requests = await getAll(sql, params);
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update visit request status (admin/staff)
+app.patch('/api/visit-requests/:id', async (req, res) => {
+  try {
+    const { status, assigned_to, notes } = req.body;
+    const updates = [];
+    const params = [];
+    let paramCount = 1;
+
+    if (status) {
+      updates.push(`status = $${paramCount++}`);
+      params.push(status);
+    }
+    if (assigned_to !== undefined) {
+      updates.push(`assigned_to = $${paramCount++}`);
+      params.push(assigned_to || null);
+    }
+    if (notes !== undefined) {
+      updates.push(`notes = $${paramCount++}`);
+      params.push(notes);
+    }
+    updates.push(`updated_at = NOW()`);
+
+    params.push(req.params.id);
+    const sql = `UPDATE visit_requests SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+
+    const result = await query(sql, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Visit request not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ ADMIN STATS ENDPOINTS ============
+
+// Get dashboard stats
+app.get('/api/stats', async (req, res) => {
+  try {
+    const pendingProps = await getOne('SELECT COUNT(*) as count FROM properties WHERE status = $1', ['pending']);
+    const liveProps = await getOne('SELECT COUNT(*) as count FROM properties WHERE status = $1', ['live']);
+    const newRequests = await getOne('SELECT COUNT(*) as count FROM visit_requests WHERE status = $1', ['new']);
+    const totalViews = await getOne('SELECT SUM(views) as total FROM properties');
+
+    res.json({
+      pending_properties: parseInt(pendingProps.count),
+      live_properties: parseInt(liveProps.count),
+      new_requests: parseInt(newRequests.count),
+      total_views: parseInt(totalViews.total) || 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.listen(PORT, () => {
+  console.log(`✓ API running on http://localhost:${PORT}`);
+});
