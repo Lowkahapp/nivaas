@@ -4,7 +4,10 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import Anthropic from '@anthropic-ai/sdk';
 import { getOne, getAll, query } from './db.js';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -399,77 +402,239 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
 
 app.get('/api/trends', async (req, res) => {
   try {
-    // 1. Average rent + count by BHK
-    const byBhk = await getAll(
+    const { city } = req.query; // optional city filter
+
+    // ── Live listing data ──────────────────────────────────────────────────
+    const liveFilter = city ? "status = 'live' AND city = $1" : "status = 'live'";
+    const liveParams = city ? [city] : [];
+
+    const byBhkLive = await getAll(
       `SELECT bhk,
               ROUND(AVG(rent)) AS avg_rent,
               ROUND(MIN(rent))  AS min_rent,
               ROUND(MAX(rent))  AS max_rent,
               COUNT(*)          AS listing_count
        FROM properties
-       WHERE status = 'live'
-       GROUP BY bhk
-       ORDER BY bhk`,
-      []
+       WHERE ${liveFilter}
+       GROUP BY bhk ORDER BY bhk`,
+      liveParams
     );
 
-    // 2. Top localities by listing count + avg rent
-    const byLocality = await getAll(
-      `SELECT locality,
-              ROUND(AVG(rent))  AS avg_rent,
+    const byLocalityLive = await getAll(
+      `SELECT locality, city,
+              ROUND(AVG(rent)) AS avg_rent,
               COUNT(*)          AS listing_count
        FROM properties
-       WHERE status = 'live' AND locality != ''
-       GROUP BY locality
-       ORDER BY listing_count DESC
-       LIMIT 10`,
-      []
+       WHERE ${liveFilter} AND locality != ''
+       GROUP BY locality, city ORDER BY listing_count DESC LIMIT 15`,
+      liveParams
     );
 
-    // 3. Demand vs supply — enquiries per listing by locality
     const demandSupply = await getAll(
-      `SELECT p.locality,
-              COUNT(DISTINCT p.id)   AS live_listings,
-              COUNT(vr.id)           AS total_enquiries,
-              ROUND(COUNT(vr.id)::numeric / NULLIF(COUNT(DISTINCT p.id), 0), 1) AS enquiries_per_listing
+      `SELECT p.locality, p.city,
+              COUNT(DISTINCT p.id) AS live_listings,
+              COUNT(vr.id)         AS total_enquiries,
+              ROUND(COUNT(vr.id)::numeric / NULLIF(COUNT(DISTINCT p.id),0), 1) AS enquiries_per_listing
        FROM properties p
        LEFT JOIN visit_requests vr ON vr.property_id = p.id
-       WHERE p.status = 'live' AND p.locality != ''
-       GROUP BY p.locality
-       ORDER BY enquiries_per_listing DESC
-       LIMIT 10`,
-      []
+       WHERE p.${liveFilter.replace('status', 'p.status')} AND p.locality != ''
+       GROUP BY p.locality, p.city
+       ORDER BY enquiries_per_listing DESC LIMIT 15`,
+      liveParams
     );
 
-    // 4. Summary stats
     const summary = await getOne(
-      `SELECT ROUND(AVG(rent)) AS overall_avg_rent,
-              COUNT(*)          AS total_live_listings
-       FROM properties
-       WHERE status = 'live'`,
-      []
+      `SELECT ROUND(AVG(rent)) AS overall_avg_rent, COUNT(*) AS total_live_listings
+       FROM properties WHERE ${liveFilter}`,
+      liveParams
     );
 
     const newThisMonth = await getOne(
-      `SELECT COUNT(*) AS count
-       FROM visit_requests
-       WHERE created_at >= date_trunc('month', NOW())`,
+      `SELECT COUNT(*) AS count FROM visit_requests WHERE created_at >= date_trunc('month', NOW())`,
       []
     );
 
+    // ── AI benchmark data ──────────────────────────────────────────────────
+    const aiFilter = city ? 'city = $1' : '1=1';
+    const aiParams = city ? [city] : [];
+
+    const aiBenchmarks = await getAll(
+      `SELECT locality, city, bhk, avg_rent, min_rent, max_rent, notes, generated_at
+       FROM market_benchmarks WHERE ${aiFilter}
+       ORDER BY city, locality, bhk`,
+      aiParams
+    );
+
+    // Group AI benchmarks by city for the response
+    const aiByCity = {};
+    for (const row of aiBenchmarks) {
+      if (!aiByCity[row.city]) aiByCity[row.city] = [];
+      aiByCity[row.city].push(row);
+    }
+
+    // ── Merge: if live data is sparse, supplement with AI benchmarks ──────
+    const liveCityCount = parseInt(summary?.total_live_listings || 0);
+    const dataSource = liveCityCount >= 5 ? 'live' : aiBenchmarks.length > 0 ? 'ai' : 'sample';
+
+    // For by_bhk: use live if available, otherwise aggregate AI
+    let byBhk = byBhkLive;
+    if (byBhk.length === 0 && aiBenchmarks.length > 0) {
+      const bhkMap = {};
+      for (const b of aiBenchmarks) {
+        if (!bhkMap[b.bhk]) bhkMap[b.bhk] = { rents: [], mins: [], maxes: [] };
+        bhkMap[b.bhk].rents.push(parseInt(b.avg_rent));
+        bhkMap[b.bhk].mins.push(parseInt(b.min_rent));
+        bhkMap[b.bhk].maxes.push(parseInt(b.max_rent));
+      }
+      byBhk = Object.entries(bhkMap)
+        .sort(([a], [b]) => a - b)
+        .map(([bhk, v]) => ({
+          bhk: parseInt(bhk),
+          avg_rent: Math.round(v.rents.reduce((a, b) => a + b, 0) / v.rents.length),
+          min_rent: Math.min(...v.mins),
+          max_rent: Math.max(...v.maxes),
+          listing_count: 0,
+        }));
+    }
+
+    // For by_locality: use live, then append AI localities not in live data
+    let byLocality = byLocalityLive;
+    if (aiBenchmarks.length > 0) {
+      const liveLocalities = new Set(byLocalityLive.map((r) => r.locality));
+      const aiLocalities = {};
+      for (const b of aiBenchmarks) {
+        if (liveLocalities.has(b.locality)) continue;
+        if (!aiLocalities[b.locality]) aiLocalities[b.locality] = { rents: [], city: b.city };
+        aiLocalities[b.locality].rents.push(parseInt(b.avg_rent));
+      }
+      const aiRows = Object.entries(aiLocalities).map(([locality, v]) => ({
+        locality,
+        city: v.city,
+        avg_rent: Math.round(v.rents.reduce((a, b) => a + b, 0) / v.rents.length),
+        listing_count: 0,
+        source: 'ai',
+      }));
+      byLocality = [...byLocality, ...aiRows].slice(0, 20);
+    }
+
     res.json({
       generated_at: new Date().toISOString(),
+      data_source: dataSource,
+      ai_benchmarks_count: aiBenchmarks.length,
+      ai_last_updated: aiBenchmarks[0]?.generated_at || null,
       summary: {
         overall_avg_rent: parseInt(summary?.overall_avg_rent || 0),
-        total_live_listings: parseInt(summary?.total_live_listings || 0),
+        total_live_listings: liveCityCount,
         enquiries_this_month: parseInt(newThisMonth?.count || 0),
+        cities_covered: Object.keys(aiByCity).length,
       },
       by_bhk: byBhk,
       by_locality: byLocality,
       demand_supply: demandSupply,
+      ai_by_city: aiByCity,
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ AI RENTAL BENCHMARKS ============
+
+// POST /api/trends/ai-refresh  (admin protected)
+// Asks Claude for current rental benchmarks across major Indian cities,
+// then upserts them into the market_benchmarks table.
+app.post('/api/trends/ai-refresh', requireAdmin, async (req, res) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    const cities = req.body.cities || [
+      'Pune', 'Bangalore', 'Hyderabad', 'Mumbai', 'Chennai', 'Delhi NCR', 'Kolkata', 'Ahmedabad'
+    ];
+
+    const prompt = `You are a real estate data analyst. Provide current (${new Date().getFullYear()}) rental market benchmarks for residential apartments in major Indian cities.
+
+For each city listed below, give benchmark monthly rents (in INR) for the top 5 localities, broken down by BHK type (1, 2, 3).
+
+Cities: ${cities.join(', ')}
+
+Respond with ONLY a valid JSON array. No explanation, no markdown, no code fences. Format:
+[
+  {
+    "city": "Pune",
+    "locality": "Hinjewadi Phase 3",
+    "bhk": 2,
+    "avg_rent": 28000,
+    "min_rent": 22000,
+    "max_rent": 36000,
+    "notes": "IT hub, high demand from tech professionals"
+  }
+]
+
+Include realistic, current figures based on your knowledge of each market. Cover a range of localities from premium to affordable within each city.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
+
+    // Strip any accidental markdown fences
+    const jsonStr = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const benchmarks = JSON.parse(jsonStr);
+
+    if (!Array.isArray(benchmarks)) throw new Error('AI did not return an array');
+
+    // Upsert into market_benchmarks
+    let inserted = 0;
+    for (const b of benchmarks) {
+      if (!b.city || !b.locality || !b.bhk || !b.avg_rent) continue;
+      await query(
+        `INSERT INTO market_benchmarks (locality, city, bhk, avg_rent, min_rent, max_rent, notes, generated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         ON CONFLICT (locality, bhk)
+         DO UPDATE SET
+           city = EXCLUDED.city,
+           avg_rent = EXCLUDED.avg_rent,
+           min_rent = EXCLUDED.min_rent,
+           max_rent = EXCLUDED.max_rent,
+           notes = EXCLUDED.notes,
+           generated_at = NOW()`,
+        [b.locality, b.city, parseInt(b.bhk), parseInt(b.avg_rent), parseInt(b.min_rent || b.avg_rent * 0.8), parseInt(b.max_rent || b.avg_rent * 1.3), b.notes || null]
+      );
+      inserted++;
+    }
+
+    res.json({
+      message: `AI benchmarks refreshed — ${inserted} records upserted`,
+      cities,
+      records: inserted,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('AI refresh error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/trends/benchmarks  — fetch all stored AI benchmarks (optional city filter)
+app.get('/api/trends/benchmarks', async (req, res) => {
+  try {
+    const { city } = req.query;
+    let sql = 'SELECT * FROM market_benchmarks';
+    const params = [];
+    if (city) {
+      sql += ' WHERE city = $1';
+      params.push(city);
+    }
+    sql += ' ORDER BY city, locality, bhk';
+    const rows = await getAll(sql, params);
+    res.json(rows);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

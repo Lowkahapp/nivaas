@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { BarChart3, Home, Users, AlertCircle, CheckCircle2, Clock, Eye, Lock } from "lucide-react"
+import { BarChart3, Home, Users, AlertCircle, CheckCircle2, Clock, Eye, Lock, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface DashboardStats {
@@ -42,6 +42,8 @@ export default function AdminPage() {
   const [adminKey, setAdminKey] = useState("")
   const [keyInput, setKeyInput] = useState("")
   const [loginError, setLoginError] = useState("")
+  const [aiRefreshing, setAiRefreshing] = useState(false)
+  const [aiMessage, setAiMessage] = useState("")
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -149,6 +151,25 @@ export default function AdminPage() {
     }
   }
 
+  async function refreshAiBenchmarks() {
+    try {
+      setAiRefreshing(true)
+      setAiMessage("")
+      const response = await fetch(`${apiUrl}/api/trends/ai-refresh`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({}),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Refresh failed")
+      setAiMessage(`✓ ${result.message}`)
+    } catch (err) {
+      setAiMessage(`Error: ${err instanceof Error ? err.message : "Unknown error"}`)
+    } finally {
+      setAiRefreshing(false)
+    }
+  }
+
   async function updateRequestStatus(id: number, status: string) {
     try {
       const response = await fetch(`${apiUrl}/api/visit-requests/${id}`, {
@@ -183,9 +204,25 @@ export default function AdminPage() {
             <h1 className="font-heading text-2xl font-bold text-foreground">Nivaas Admin</h1>
             <p className="text-sm text-muted-foreground">Manage properties and tenant leads</p>
           </div>
-          <Button variant="outline" onClick={loadData}>
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {aiMessage && (
+              <span className={`text-sm ${aiMessage.startsWith("✓") ? "text-green-600" : "text-red-600"}`}>
+                {aiMessage}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              onClick={refreshAiBenchmarks}
+              disabled={aiRefreshing}
+              className="gap-1.5"
+            >
+              <Sparkles className="size-4" />
+              {aiRefreshing ? "Refreshing AI…" : "Refresh AI Trends"}
+            </Button>
+            <Button variant="outline" onClick={loadData}>
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -62,6 +62,21 @@ CREATE TABLE visit_requests (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- AI-generated rental market benchmarks
+CREATE TABLE market_benchmarks (
+  id           SERIAL PRIMARY KEY,
+  locality     VARCHAR(255) NOT NULL,
+  city         VARCHAR(100) NOT NULL DEFAULT 'Pune',
+  bhk          INTEGER NOT NULL,
+  avg_rent     INTEGER NOT NULL,
+  min_rent     INTEGER NOT NULL,
+  max_rent     INTEGER NOT NULL,
+  source       VARCHAR(50) DEFAULT 'ai',
+  notes        TEXT,
+  generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (locality, bhk)
+);
+
 -- Create indexes for faster queries
 CREATE INDEX idx_properties_status ON properties(status);
 CREATE INDEX idx_properties_landlord ON properties(landlord_id);
