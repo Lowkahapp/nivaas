@@ -17,10 +17,10 @@ const FURNISHING_OPTIONS = ["Any", "Fully Furnished", "Semi Furnished", "Unfurni
 
 const RENT_OPTIONS = [
   { label: "Any rent", value: 1000000 },
-  { label: "Under \u20B920,000", value: 20000 },
-  { label: "Under \u20B925,000", value: 25000 },
-  { label: "Under \u20B930,000", value: 30000 },
-  { label: "Under \u20B940,000", value: 40000 },
+  { label: "Under ₹20,000", value: 20000 },
+  { label: "Under ₹25,000", value: 25000 },
+  { label: "Under ₹30,000", value: 30000 },
+  { label: "Under ₹40,000", value: 40000 },
 ]
 
 const SORT_OPTIONS = [
@@ -92,8 +92,8 @@ export function SearchResults({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search society or locality in Hinjewadi Phase 3"
-          aria-label="Search society or locality"
+          placeholder="Search by society, BHK, or furnishing"
+          aria-label="Search properties"
           className="w-full bg-transparent py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
         {query && (
@@ -139,8 +139,8 @@ export function SearchResults({
       {/* Results header */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-heading text-lg font-bold text-foreground">
-          {filtered.length} {filtered.length === 1 ? "home" : "homes"}
-          {query ? ` for "${query}"` : " in Hinjewadi Phase 3"}
+          {filtered.length} {filtered.length === 1 ? "property" : "properties"}
+          {query ? ` for "${query}"` : " available"}
         </h1>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Sort:
@@ -167,9 +167,9 @@ export function SearchResults({
         </div>
       ) : (
         <div className="mt-16 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 text-center">
-          <p className="font-heading text-lg font-bold text-foreground">No homes match your filters</p>
+          <p className="font-heading text-lg font-bold text-foreground">No properties match your filters</p>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Try raising your budget or clearing a filter. We add new verified flats every week.
+            Try adjusting your filters or search terms. We add new verified properties regularly.
           </p>
           <Button variant="outline" size="sm" className="mt-4" onClick={reset}>
             Clear filters

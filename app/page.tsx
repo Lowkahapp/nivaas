@@ -26,8 +26,8 @@ const perks = [
 ]
 
 const steps = [
-  { n: "01", title: "Tell us what you need", body: "Filter by BHK, furnishing, and budget across Hinjewadi Phase 3." },
-  { n: "02", title: "We schedule visits", body: "Your manager arranges back-to-back visits at verified flats only." },
+  { n: "01", title: "Tell us what you need", body: "Filter by BHK, furnishing, and budget to find your perfect home." },
+  { n: "02", title: "We schedule visits", body: "Your manager arranges back-to-back visits at verified properties only." },
   { n: "03", title: "Move in stress-free", body: "We handle the agreement, deposit, and handover for you." },
 ]
 
@@ -44,7 +44,7 @@ export default function HomePage() {
           <div className="absolute inset-0">
             <Image
               src="/images/hero-city.png"
-              alt="Modern residential towers in Hinjewadi, Pune at sunset"
+              alt="Modern residential buildings"
               fill
               priority
               className="object-cover"
@@ -55,21 +55,20 @@ export default function HomePage() {
             <div className="max-w-2xl">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-background/15 px-3 py-1 text-sm font-medium text-background backdrop-blur">
                 <MapPin className="size-4" />
-                Hinjewadi Phase 3, Pune
+                Across Major Cities
               </span>
               <h1 className="mt-4 font-heading text-4xl font-extrabold leading-tight tracking-tight text-background text-balance sm:text-5xl lg:text-6xl">
-                Verified furnished flats, minutes from your office
+                Find verified apartments instantly
               </h1>
               <p className="mt-4 max-w-xl text-lg leading-relaxed text-background/90 text-pretty">
-                Nivaas lists only 100% manually verified 2 BHK homes near the Rajiv Gandhi Infotech
-                Park, with a concierge who handles visits and paperwork for you.
+                Search verified, manually inspected rentals in your city. Get a concierge team that handles visits and paperwork for you.
               </p>
               <div className="mt-8">
                 <SearchBar />
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-background/90">
-                <span>Popular:</span>
-                {["Megapolis", "Mont Vert", "Rohan Ananta", "Fully Furnished"].map((c) => (
+                <span>Browse by type:</span>
+                {["1 BHK", "2 BHK", "3 BHK", "Fully Furnished"].map((c) => (
                   <Link
                     key={c}
                     href={`/search?q=${encodeURIComponent(c)}`}
@@ -86,10 +85,10 @@ export default function HomePage() {
         {/* Trust bar */}
         <section className="border-b border-border bg-card">
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-4 lg:px-8">
-            <Stat value={`${verifiedCount}+`} label="Verified flats live" />
+            <Stat value={`${verifiedCount}+`} label="Verified listings" />
             <Stat value="100%" label="Physically inspected" />
-            <Stat value="< 3 km" label="From major IT parks" />
-            <Stat value="10/week" label="Successful leases" />
+            <Stat value="0 %Brokerage" label="Tenant charges" />
+            <Stat value="24/7" label="Customer support" />
           </div>
         </section>
 
@@ -97,10 +96,10 @@ export default function HomePage() {
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h2 className="font-heading text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-              Renting near Hinjewadi, minus the headaches
+              Renting made simple
             </h2>
             <p className="mt-2 text-muted-foreground">
-              No fake listings, no surprise brokerage, no endless site visits.
+              No fake listings, no surprise charges, no endless site visits.
             </p>
           </div>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
@@ -120,7 +119,7 @@ export default function HomePage() {
         <section className="border-y border-border bg-secondary/40">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
             <h2 className="font-heading text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-              How Nivaas works
+              How we work
             </h2>
             <div className="mt-8 grid gap-6 md:grid-cols-3">
               {steps.map((step) => (
@@ -141,7 +140,7 @@ export default function HomePage() {
               <h2 className="font-heading text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
                 Verified homes ready to move in
               </h2>
-              <p className="mt-2 text-muted-foreground">Hand-picked flats you can visit this week.</p>
+              <p className="mt-2 text-muted-foreground">Hand-picked properties you can visit this week.</p>
             </div>
             <Link
               href="/search"
@@ -174,11 +173,10 @@ export default function HomePage() {
               <Building2 className="size-6" />
             </span>
             <h2 className="mx-auto mt-4 max-w-2xl font-heading text-2xl font-extrabold tracking-tight text-primary-foreground text-balance sm:text-3xl">
-              Own a flat in Hinjewadi Phase 3? Let us rent it for you.
+              Own a property? List it with us
             </h2>
             <p className="mx-auto mt-3 max-w-xl leading-relaxed text-primary-foreground/85">
-              List with Nivaas and our concierge team finds verified, screened tenants, handles
-              visits, and manages the paperwork.
+              Our team verifies your property, finds qualified tenants, schedules visits, and manages the entire process for you.
             </p>
             <div className="mt-8 flex justify-center">
               <Link
@@ -186,7 +184,7 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
               >
                 <IndianRupee className="size-4" />
-                List your flat
+                List your property
               </Link>
             </div>
           </div>

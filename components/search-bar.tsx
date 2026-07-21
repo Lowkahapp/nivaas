@@ -35,8 +35,8 @@ export function SearchBar({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by society, e.g. Megapolis, Mont Vert"
-          aria-label="Search society or locality"
+          placeholder="Find your perfect home..."
+          aria-label="Search properties"
           className={`w-full bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none ${
             size === "lg" ? "py-2 text-base" : "py-1.5 text-sm"
           }`}
