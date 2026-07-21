@@ -31,7 +31,7 @@ export function SiteFooter() {
             </span>
           </Link>
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-            100% manually verified furnished rentals in Hinjewadi Phase 3, Pune. Built for IT
+            100% manually verified furnished rentals for
             professionals who want a home without the broker hassle.
           </p>
           </div>
